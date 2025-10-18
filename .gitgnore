@@ -1,0 +1,14 @@
+# Entornos locales anteriores
+node_modules/
+vendor/
+
+# Archivos de configuración sensibles
+.env
+
+# Archivos generados por la aplicación
+storage/*.sqlite
+storage/database.sqlite
+storage/mail/*
+!storage/mail/.gitkeep
+public/uploads/*
+!public/uploads/.gitkeep
