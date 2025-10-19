@@ -32,7 +32,7 @@ final class AuthController extends BaseController
         $this->render('auth/login', [
             'title' => 'Iniciar sesión',
             'error' => null,
-            'captchaQuestion' => generate_login_captcha(),
+            'captcha' => generate_login_captcha(),
             'resendEmail' => null,
         ]);
     }
@@ -42,13 +42,14 @@ final class AuthController extends BaseController
         $email = trim($_POST['email'] ?? '');
         $password = $_POST['password'] ?? '';
         $captcha = $_POST['captcha'] ?? '';
+        $turnstileResponse = $_POST['cf-turnstile-response'] ?? null;
         $token = $_POST['csrf_token'] ?? '';
 
         if (!validate_csrf($token)) {
             $this->render('auth/login', [
                 'title' => 'Iniciar sesión',
                 'error' => 'Token CSRF inválido.',
-                'captchaQuestion' => generate_login_captcha(),
+                'captcha' => generate_login_captcha(),
                 'resendEmail' => null,
             ]);
             return;
@@ -61,18 +62,18 @@ final class AuthController extends BaseController
             $this->render('auth/login', [
                 'title' => 'Iniciar sesión',
                 'error' => 'Se superó el número de intentos permitidos. Espera unos minutos antes de volver a intentarlo.',
-                'captchaQuestion' => generate_login_captcha(),
+                'captcha' => generate_login_captcha(),
                 'resendEmail' => null,
             ]);
             return;
         }
 
-        if (!validate_login_captcha($captcha)) {
+        if (!validate_login_captcha($captcha, $turnstileResponse, $ipAddress)) {
             $this->attempts->record($normalizedEmail, $ipAddress, false);
             $this->render('auth/login', [
                 'title' => 'Iniciar sesión',
                 'error' => 'La verificación CAPTCHA es incorrecta.',
-                'captchaQuestion' => generate_login_captcha(),
+                'captcha' => generate_login_captcha(),
                 'resendEmail' => null,
             ]);
             return;
@@ -85,7 +86,7 @@ final class AuthController extends BaseController
             $this->render('auth/login', [
                 'title' => 'Iniciar sesión',
                 'error' => 'Credenciales inválidas.',
-                'captchaQuestion' => generate_login_captcha(),
+                'captcha' => generate_login_captcha(),
                 'resendEmail' => null,
             ]);
             return;
@@ -96,7 +97,7 @@ final class AuthController extends BaseController
             $this->render('auth/login', [
                 'title' => 'Iniciar sesión',
                 'error' => 'Debes confirmar tu correo electrónico antes de ingresar. Revisa tu bandeja o solicita un nuevo enlace.',
-                'captchaQuestion' => generate_login_captcha(),
+                'captcha' => generate_login_captcha(),
                 'resendEmail' => $user['email'],
             ]);
             return;
@@ -109,6 +110,55 @@ final class AuthController extends BaseController
         $this->attempts->record($normalizedEmail, $ipAddress, true);
 
         redirect('/profile');
+    }
+
+    public function captchaImage(): void
+    {
+        if (captcha_mode() !== 'image') {
+            http_response_code(404);
+            return;
+        }
+
+        if (!isset($_SESSION['login_captcha_answer'])) {
+            generate_login_captcha();
+        }
+
+        $code = $_SESSION['login_captcha_answer'] ?? (string) random_int(10000, 99999);
+
+        header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+        header('Pragma: no-cache');
+
+        if (!function_exists('imagecreatetruecolor')) {
+            header('Content-Type: text/plain; charset=UTF-8');
+            echo $code;
+            return;
+        }
+
+        $width = 180;
+        $height = 60;
+        $image = imagecreatetruecolor($width, $height);
+
+        $background = imagecolorallocate($image, 18, 38, 64);
+        $foreground = imagecolorallocate($image, 255, 255, 255);
+        $accent = imagecolorallocate($image, 13, 110, 253);
+
+        imagefilledrectangle($image, 0, 0, $width, $height, $background);
+
+        for ($i = 0; $i < 5; $i++) {
+            $lineColor = imagecolorallocate($image, random_int(50, 120), random_int(80, 140), random_int(160, 220));
+            imageline($image, random_int(0, $width), 0, random_int(0, $width), $height, $lineColor);
+        }
+
+        imagestring($image, 5, random_int(20, 40), random_int(15, 25), $code, $foreground);
+
+        for ($i = 0; $i < 40; $i++) {
+            imagesetpixel($image, random_int(0, $width - 1), random_int(0, $height - 1), $accent);
+        }
+
+        header('Content-Type: image/png');
+        imagepng($image);
+        imagedestroy($image);
+        exit;
     }
 
     public function showRegister(): void
@@ -233,47 +283,46 @@ final class AuthController extends BaseController
         redirect('/login');
     }
 
-    public function resendVerification(): void
-    {
-        if (!is_post()) {
-            redirect('/login');
-        }
-
-        $token = $_POST['csrf_token'] ?? '';
-        if (!validate_csrf($token)) {
-            flash('error', 'No fue posible procesar la solicitud.');
-            redirect('/login');
-            return;
-        }
-
-        $email = trim($_POST['email'] ?? '');
-
-        if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-            flash('info', 'Si la cuenta existe recibirás un nuevo correo de verificación.');
-            redirect('/login');
-            return;
-        }
-
-        $user = $this->users->findByEmail($email);
-
-        if (!$user) {
-            flash('info', 'Si la cuenta existe recibirás un nuevo correo de verificación.');
-            redirect('/login');
-            return;
-        }
-
-        if (!empty($user['email_verified_at'])) {
-            flash('success', 'Este correo ya fue verificado. Puedes iniciar sesión.');
-            redirect('/login');
-            return;
-        }
-
-        $this->sendEmailVerification((int) $user['id'], $user['email'], $user['username']);
-
-        flash('success', 'Enviamos un nuevo enlace de verificación. Revisa tu bandeja o correo no deseado.');
+public function resendVerification(): void
+{
+    if (!is_post()) {
         redirect('/login');
     }
 
+    $token = $_POST['csrf_token'] ?? '';
+    if (!validate_csrf($token)) {
+        flash('error', 'No fue posible procesar la solicitud.');
+        redirect('/login');
+        return;
+    }
+
+    $email = trim($_POST['email'] ?? '');
+
+    if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        flash('info', 'Si la cuenta existe recibirás un nuevo correo de verificación.');
+        redirect('/login');
+        return;
+    }
+
+    $user = $this->users->findByEmail($email);
+
+    if (!$user) {
+        flash('info', 'Si la cuenta existe recibirás un nuevo correo de verificación.');
+        redirect('/login');
+        return;
+    }
+
+    if (!empty($user['email_verified_at'])) {
+        flash('success', 'Este correo ya fue verificado. Puedes iniciar sesión.');
+        redirect('/login');
+        return;
+    }
+
+    $this->sendEmailVerification((int) $user['id'], $user['email'], $user['username']);
+
+    // CAMBIA ESTE MENSAJE para que coincida con el nuevo comportamiento
+    flash('success', 'Nuevo enlace de verificación generado. <strong>Usa el enlace azul arriba para verificar tu cuenta.</strong>');
+}
     public function confirmPasswordChange(string $token): void
     {
         $record = $this->tokens->consume($token, 'password_change');
@@ -309,11 +358,42 @@ final class AuthController extends BaseController
 
     private function sendEmailVerification(int $userId, string $email, string $username): void
     {
-        $token = $this->tokens->create($userId, 'email_verification', [], new DateTimeImmutable('+24 hours'));
-        $link = app_url('/email/verify/' . $token);
+$token = $this->tokens->create($userId, 'email_verification', [], new DateTimeImmutable('+24 hours'));
+    $link = app_url('/email/verify/' . $token);
 
-        $body = "Hola {$username},\n\nGracias por registrarte en " . APP_NAME . ". Haz clic en el siguiente enlace para confirmar tu correo electrónico:\n{$link}\n\nSi no creaste esta cuenta, ignora este mensaje.";
+    $body = "Hola {$username},\n\nGracias por registrarte en " . APP_NAME . ". Haz clic en el siguiente enlace para confirmar tu correo electrónico:\n{$link}\n\nSi no creaste esta cuenta, ignora este mensaje.";
 
-        send_system_mail($email, 'Confirma tu correo electrónico', $body);
+    // SIEMPRE mostrar enlace en pantalla
+    echo "<div style='
+        background: #e8f4fd; 
+        padding: 20px; 
+        margin: 20px 0; 
+        border: 2px solid #2196F3;
+        border-radius: 8px;
+        font-family: Arial, sans-serif;
+    '>";
+    echo "<h3 style='color: #1976D2; margin-top: 0;'>📧 ENLACE DE VERIFICACIÓN</h3>";
+    echo "<p><strong>Para:</strong> {$email}</p>";
+    echo "<p><strong>Usuario:</strong> {$username}</p>";
+    echo "<p><strong>Enlace de verificación:</strong></p>";
+    echo "<div style='
+        background: white; 
+        padding: 10px; 
+        border: 1px solid #ccc;
+        border-radius: 4px;
+        word-break: break-all;
+        margin: 10px 0;
+    '>";
+    echo "<a href='{$link}' style='color: #1976D2; text-decoration: none; font-weight: bold;' target='_blank'>{$link}</a>";
+    echo "</div>";
+    echo "<p style='color: #666; font-size: 14px;'>";
+    echo "🔍 <strong>Para verificar:</strong> Haz clic en el enlace arriba";
+    echo "</p>";
+    echo "</div>";
+
+    // También guardar en archivo
+    send_system_mail($email, 'Confirma tu correo electrónico', $body);
+    
+    flash('success', 'Cuenta creada. <strong>Usa el enlace azul arriba para verificar.</strong>');
     }
 }

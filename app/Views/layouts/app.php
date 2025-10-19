@@ -14,6 +14,9 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
     <link rel="stylesheet" href="/assets/css/styles.css">
+    <?php if (captcha_mode() === 'turnstile'): ?>
+        <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+    <?php endif; ?>
 </head>
 <body>
 <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
@@ -33,7 +36,9 @@
                         <li class="nav-item"><a class="nav-link" href="/user-dashboard">Noticias</a></li>
                     <?php elseif (in_array('ROLE_MODERATOR', $currentUser['roles'], true)): ?>
                         <li class="nav-item"><a class="nav-link" href="/moderator-dashboard">Banners</a></li>
-                        <li class="nav-item"><a class="nav-link" href="/user-dashboard">Noticias</a></li>
+                        <?php if (in_array('ROLE_USER', $currentUser['roles'], true)): ?>
+                            <li class="nav-item"><a class="nav-link" href="/user-dashboard">Noticias</a></li>
+                        <?php endif; ?>
                     <?php else: ?>
                         <li class="nav-item"><a class="nav-link" href="/user-dashboard">Noticias</a></li>
                     <?php endif; ?>

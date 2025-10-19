@@ -6,15 +6,15 @@ namespace App;
 
 final class Router
 {
-    /** @var array<string, array<int, array{pattern:string, handler:callable}>> */
+    /** @var array<string, array<int, array{pattern:string, controller:class-string, method:string}>> */
     private array $routes = [];
 
-    public function get(string $pattern, callable $handler): void
+    public function get(string $pattern, array $handler): void
     {
         $this->addRoute('GET', $pattern, $handler);
     }
 
-    public function post(string $pattern, callable $handler): void
+    public function post(string $pattern, array $handler): void
     {
         $this->addRoute('POST', $pattern, $handler);
     }
@@ -25,8 +25,20 @@ final class Router
 
         foreach ($methodRoutes as $route) {
             if (preg_match($route['pattern'], $uri, $matches)) {
-                array_shift($matches);
-                ($route['handler'])(...array_values($matches));
+                array_shift($matches); // Remover el match completo
+                
+                // Convertir parámetros numéricos a int cuando sea posible
+                $params = [];
+                foreach ($matches as $param) {
+                    if (is_numeric($param)) {
+                        $params[] = (int) $param;
+                    } else {
+                        $params[] = $param;
+                    }
+                }
+                
+                $controller = new $route['controller']();
+                call_user_func_array([$controller, $route['method']], $params);
                 return;
             }
         }
@@ -38,12 +50,13 @@ final class Router
         ]);
     }
 
-    private function addRoute(string $method, string $pattern, callable $handler): void
+    private function addRoute(string $method, string $pattern, array $handler): void
     {
         $regex = $this->convertPatternToRegex($pattern);
         $this->routes[$method][] = [
             'pattern' => $regex,
-            'handler' => $handler,
+            'controller' => $handler[0],
+            'method' => $handler[1],
         ];
     }
 

@@ -4,21 +4,19 @@ declare(strict_types=1);
 
 namespace App\Controllers;
 
-use App\Models\NewsRepository;
 use App\Models\UserRepository;
 use App\Models\UserTokenRepository;
 use DateTimeImmutable;
+use PDOException;
 
 final class UserController extends BaseController
 {
     private UserRepository $users;
-    private NewsRepository $news;
     private UserTokenRepository $tokens;
 
     public function __construct()
     {
         $this->users = new UserRepository();
-        $this->news = new NewsRepository();
         $this->tokens = new UserTokenRepository();
     }
 
@@ -50,7 +48,13 @@ final class UserController extends BaseController
 
         $username = trim($_POST['username'] ?? '');
         if ($username !== '') {
-            $this->users->updateUsername((int) $user['id'], $username);
+            try {
+                $this->users->updateUsername((int) $user['id'], $username);
+            } catch (PDOException $exception) {
+                flash('error', 'El nombre de usuario ya está en uso. Elige otro diferente.');
+                redirect('/profile');
+            }
+
             $updated = $this->users->findById((int) $user['id']);
             if ($updated) {
                 refresh_current_user($updated);
@@ -121,63 +125,6 @@ final class UserController extends BaseController
         redirect('/profile');
     }
 
-    public function userDashboard(): void
-    {
-        $user = current_user();
-        if (!$user) {
-            redirect('/login');
-        }
-
-        $this->render('pages/user_dashboard', [
-            'title' => 'Noticias recientes',
-            'newsItems' => $this->news->latest(20),
-        ]);
-    }
-
-    public function scrapeNews(): void
-    {
-        $user = current_user();
-        if (!$user) {
-            redirect('/login');
-        }
-
-        $token = $_POST['csrf_token'] ?? '';
-        if (!validate_csrf($token)) {
-            redirect('/user-dashboard');
-        }
-
-        $samples = [
-            [
-                'title' => 'Calidad de software en 2025',
-                'summary' => 'Las organizaciones apuestan por métricas continuas de calidad.',
-                'author' => 'Equipo Editorial',
-                'url' => 'https://example.com/calidad-2025',
-                'image_url' => null,
-                'source' => 'Tendencias',
-            ],
-            [
-                'title' => 'Automatización de pruebas',
-                'summary' => 'Nuevas herramientas aceleran la entrega de aplicaciones.',
-                'author' => 'Equipo Editorial',
-                'url' => 'https://example.com/automatizacion-pruebas',
-                'image_url' => null,
-                'source' => 'Automatización',
-            ],
-            [
-                'title' => 'Equipos remotos y calidad',
-                'summary' => 'Los equipos distribuidos adoptan prácticas colaborativas.',
-                'author' => 'Equipo Editorial',
-                'url' => 'https://example.com/equipos-remotos',
-                'image_url' => null,
-                'source' => 'Gestión',
-            ],
-        ];
-
-        $this->news->replaceWith($samples);
-        flash('success', 'Se actualizaron las noticias con la última simulación.');
-        redirect('/user-dashboard');
-    }
-
     public function adminDashboard(): void
     {
         $user = current_user();
@@ -193,6 +140,7 @@ final class UserController extends BaseController
 
     public function updateRoles(int $userId): void
     {
+        $userId = (int) $userId;
         $user = current_user();
         if (!$user || !in_array('ROLE_ADMIN', $user['roles'], true)) {
             redirect('/');
@@ -234,4 +182,4 @@ final class UserController extends BaseController
         flash('success', 'Los roles del usuario se actualizaron correctamente.');
         redirect('/admin-dashboard');
     }
-}
+}   

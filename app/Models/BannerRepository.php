@@ -34,6 +34,11 @@ final class BannerRepository
         return $statement->fetchAll();
     }
 
+    public function countActive(): int
+    {
+        return (int) $this->db->query('SELECT COUNT(*) FROM banners WHERE is_active = 1')->fetchColumn();
+    }
+
     public function find(int $id): ?array
     {
         $statement = $this->db->prepare('SELECT * FROM banners WHERE id = :id');

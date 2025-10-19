@@ -105,6 +105,11 @@ final class UserRepository
         ]);
     }
 
+    public function count(): int
+    {
+        return (int) $this->db->query('SELECT COUNT(*) FROM users')->fetchColumn();
+    }
+
     private function transform(?array $user): ?array
     {
         if ($user === null) {

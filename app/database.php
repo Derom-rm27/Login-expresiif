@@ -86,8 +86,14 @@ final class Database
             url VARCHAR(255) NULL,
             image_url VARCHAR(255) NULL,
             source VARCHAR(100) NULL,
-            created_at DATETIME NOT NULL
+            created_by INT UNSIGNED NULL,
+            created_at DATETIME NOT NULL,
+            updated_at DATETIME NOT NULL,
+            CONSTRAINT fk_news_users FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
         ) ENGINE=InnoDB DEFAULT CHARSET=' . DB_CHARSET);
+
+        self::ensureColumn($db, 'news', 'created_by', 'ALTER TABLE news ADD COLUMN created_by INT UNSIGNED NULL AFTER source, ADD CONSTRAINT fk_news_users FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL');
+        self::ensureColumn($db, 'news', 'updated_at', 'ALTER TABLE news ADD COLUMN updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP AFTER created_at');
 
         $db->exec('CREATE TABLE IF NOT EXISTS page_visits (
             id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
@@ -146,7 +152,8 @@ final class Database
                 ['Tendencias en ciberseguridad', 'Los ataques dirigidos impulsan nuevas estrategias de protección.', 'Equipo Editorial', 'https://example.com/ciberseguridad', null, 'Seguridad'],
             ];
 
-            $newsStatement = $db->prepare('INSERT INTO news (title, summary, author, url, image_url, source, created_at) VALUES (:title, :summary, :author, :url, :image_url, :source, :created_at)');
+            $newsStatement = $db->prepare('INSERT INTO news (title, summary, author, url, image_url, source, created_by, created_at, updated_at)
+                VALUES (:title, :summary, :author, :url, :image_url, :source, :created_by, :created_at, :updated_at)');
             $now = date('Y-m-d H:i:s');
 
             foreach ($samples as $sample) {
@@ -157,9 +164,24 @@ final class Database
                     ':url' => $sample[3],
                     ':image_url' => $sample[4],
                     ':source' => $sample[5],
+                    ':created_by' => 1,
                     ':created_at' => $now,
+                    ':updated_at' => $now,
                 ]);
             }
+        }
+    }
+
+    private static function ensureColumn(PDO $db, string $table, string $column, string $statement): void
+    {
+        $query = $db->prepare('SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = :table AND COLUMN_NAME = :column');
+        $query->execute([
+            ':table' => $table,
+            ':column' => $column,
+        ]);
+
+        if ((int) $query->fetchColumn() === 0) {
+            $db->exec($statement);
         }
     }
 }

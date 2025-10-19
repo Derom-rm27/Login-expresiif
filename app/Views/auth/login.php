@@ -1,6 +1,6 @@
 <?php
 /** @var string|null $error */
-/** @var string|null $captchaQuestion */
+/** @var array<string, mixed>|null $captcha */
 /** @var string|null $resendEmail */
 ?>
 <div class="row justify-content-center">
@@ -22,11 +22,15 @@
                         <input type="password" class="form-control" id="password" name="password" required>
                     </div>
                     <div class="mb-3">
-                        <label for="captcha" class="form-label">Verificación</label>
-                        <div class="input-group">
-                            <span class="input-group-text"><?= htmlspecialchars($captchaQuestion ?? '', ENT_QUOTES) ?></span>
-                            <input type="text" class="form-control" id="captcha" name="captcha" required placeholder="Tu respuesta">
-                        </div>
+                        <label class="form-label">Verificación</label>
+                        <?php if (($captcha['mode'] ?? null) === 'turnstile'): ?>
+                            <div class="cf-turnstile" data-sitekey="<?= htmlspecialchars($captcha['site_key'] ?? '', ENT_QUOTES) ?>" data-theme="light"></div>
+                        <?php else: ?>
+                            <div class="d-flex align-items-center gap-3">
+                                <img src="<?= htmlspecialchars($captcha['image_url'] ?? '/captcha/image', ENT_QUOTES) ?>" alt="Captcha" width="160" height="54" class="rounded border">
+                                <input type="text" class="form-control" id="captcha" name="captcha" required placeholder="<?= htmlspecialchars($captcha['prompt'] ?? 'Ingresa los números', ENT_QUOTES) ?>">
+                            </div>
+                        <?php endif; ?>
                     </div>
                     <button type="submit" class="btn btn-primary w-100">Entrar</button>
                 </form>
