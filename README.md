@@ -15,11 +15,11 @@ un tablero de noticias generadas de manera simulada.
 1. Define las variables de entorno antes de iniciar el servidor (puedes exportarlas o añadirlas a tu `.bashrc`):
 
    ```bash
-   export MYSQL_HOST=127.0.0.1
-   export MYSQL_PORT=3306
-   export MYSQL_DATABASE=login_expresiif
-   export MYSQL_USER=usuario
-   export MYSQL_PASSWORD=contraseña-segura
+   export MYSQL_HOST=
+   export MYSQL_PORT=
+   export MYSQL_DATABASE=
+   export MYSQL_USER=
+   export MYSQL_PASSWORD=
    export APP_URL="http://localhost:8000"
    export MAIL_FROM_ADDRESS="no-reply@example.com"
    export MAIL_FROM_NAME="Calidad de Software"
