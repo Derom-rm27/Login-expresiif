@@ -323,6 +323,7 @@ public function resendVerification(): void
     // CAMBIA ESTE MENSAJE para que coincida con el nuevo comportamiento
     flash('success', 'Nuevo enlace de verificación generado. <strong>Usa el enlace azul arriba para verificar tu cuenta.</strong>');
 }
+
     public function confirmPasswordChange(string $token): void
     {
         $record = $this->tokens->consume($token, 'password_change');
